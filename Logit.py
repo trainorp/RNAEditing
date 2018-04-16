@@ -36,19 +36,19 @@ def siteTests(alt,ref,tot):
             temp3 = pd.DataFrame(np.stack((temp1,temp2)).T,columns=['Alt','g'])
             siteCntExDf = siteCntExDf.append(temp3)
             
-            if sum(siteCntExDf['g']) == siteCntExDf.shape[0]:
-                resDf['NT'].values[i]='a'
-                
-            elif sum(siteCntExDf['g']) == 0:
-                resDf['NT'].values[i]='b'
-                
-            else:
-                # Logistic regression model:
-                logit = sm.Logit(np.array(siteCntExDf.iloc[:,1],dtype=int),
-                                 np.array(siteCntExDf.iloc[:,0],dtype=int))
-                logitRes = logit.fit() # Fit model
-                
-                # Output:
-                resDf['diff'].values[i] = logitRes.params[0]
-                resDf['p'].values[i] = logitRes.pvalues
+        if sum(siteCntExDf['g']) == siteCntExDf.shape[0]:
+            resDf['NT'].values[i]='a'
+            
+        elif sum(siteCntExDf['g']) == 0:
+            resDf['NT'].values[i]='b'
+            
+        else:
+            # Logistic regression model:
+            logit = sm.Logit(np.array(siteCntExDf.iloc[:,1],dtype=int),
+                             np.array(siteCntExDf.iloc[:,0],dtype=int))
+            logitRes = logit.fit() # Fit model
+            
+            # Output:
+            resDf['diff'].values[i] = logitRes.params[0]
+            resDf['p'].values[i] = logitRes.pvalues
         
