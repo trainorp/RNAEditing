@@ -1,9 +1,17 @@
 import numpy as np
+import pandas as pd
 import statsmodels.api as sm
 
 # Fix missing chisq test
 from scipy import stats
 stats.chisqprob = lambda chisq, df: stats.chi2.sf(chisq, df)
+
+# Import data 
+alt = pd.read_csv('/home/patrick/gdrive/RNAEditing/alt_matrix.chr1.tsv',delimiter='\t')
+alt.shape
+alt.dtypes
+ref = pd.read_csv('/home/patrick/gdrive/RNAEditing/ref_matrix.chr1.tsv',delimiter='\t')
+tot = pd.read_csv('/home/patrick/gdrive/RNAEditing/total_matrix.chr1.tsv',delimiter='\t')
 
 # Fake data:
 yUn = np.array([0,1,2,2,1,2,1,10,11,20,13,24,12,23,13,19])
