@@ -25,11 +25,16 @@ siteCntDf = pd.DataFrame({'n': tot.iloc[i,g],'Alt': alt.iloc[i,g],'Ref': ref.ilo
                             'g': gInd})
 siteCntExDf = pd.DataFrame(columns=['Alt','g'],dtype=int)
 for j in range(siteCntDf.shape[0]):
-    temp1 = np.concatenate((np.repeat(1,siteCountDf['Alt'].values[j]),
-                    np.repeat(0,siteCountDf['Ref'].values[j])))
-    temp2 = np.repeat(siteCountDf['g'].values[j],len(temp1))
+    temp1 = np.concatenate((np.repeat(1,siteCntDf['Alt'].values[j]),
+                    np.repeat(0,siteCntDf['Ref'].values[j])))
+    temp2 = np.repeat(siteCntDf['g'].values[j],len(temp1))
     temp3 = pd.DataFrame(np.stack((temp1,temp2)).T,columns=['Alt','g'])
     siteCntExDf = siteCntExDf.append(temp3)
+    
+logit = sm.Logit(np.array(siteCntExDf.iloc[:,1],dtype=int),
+                 np.array(siteCntExDf.iloc[:,0],dtype=int))
+logitRes = logit.fit() # Fit model
+print(logitRes.summary()) # Print model 
 
 # Fake data:
 yUn = np.array([0,1,2,2,1,2,1,10,11,20,13,24,12,23,13,19])
