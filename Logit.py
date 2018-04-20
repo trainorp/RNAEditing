@@ -71,4 +71,37 @@ def siteLogisticTests(alt,ref,tot):
             
     return resDf
 
+# One site example:
+def siteLogisticTests2(alt,ref,tot):
+    resDf = pd.DataFrame({'chr': alt['chr'].values, 'pos': alt['pos'].values,
+                      'diff': 0.0, 'p': 1.0, 'NT': ''})
+    for i in range(alt.shape[0]):
+        siteCntDf = pd.DataFrame({'n': tot.iloc[i,g],'Alt': alt.iloc[i,g],
+                        'Ref': ref.iloc[i,g],'g': gInd, 'ecpms': ecpms['EPCM'].values,
+                        'Prop': alt.iloc[i,g]/tot.iloc[i,g]})
+        siteCntDf = siteCntDf[np.invert(np.isnan(siteCntDf['Prop'].values))]
+        
+        # Fix problems here:
+        if len(set(siteCntDf['g'])) == 1:
+            resDf['NT'].values[i]='All Alt in Same Group'
+        
+        elif len(set(siteCntDf['Alt'])) == 1:
+            resDf['NT'].values[i]='No var in Alt/Ref'
+            
+        # Else do chi-square test:
+        else:
+            y, X = dmatrices('Prop~ecpms+g',data=siteCntDf,return_type='dataframe')
+            logit = sm.GLM(y, X, family=sm.families.Binomial())
+            
+            try:
+                logitRes = logit.fit()
+            except sm.tools.sm_exceptions.PerfectSeparationError as e:
+                resDf['NT'].values[i]=str(e)
+                
+            # Output:
+            resDf['diff'].values[i] = logitRes.params['g']
+            resDf['p'].values[i] = logitRes.pvalues['g']
+            
+    return resDf
+
 siteLogisticTests(alt,ref,tot)
