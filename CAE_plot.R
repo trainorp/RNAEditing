@@ -4,8 +4,20 @@ library(plot3D)
 options(stringsAsFactors=FALSE)
 
 setwd('~/gdrive/RNAEditing/')
-df1<-read.table('editing_levels_counts_and_area.tsv',header=FALSE)
-names(df1)<-c("Coverage","Counts","Area")
+
+############# Import data #############
+df1a<-read.table('GM12787_polya.tsv',header=FALSE)
+df1a$cellLine<-"GM12787"
+df1a$type<-"polyA"
+df1b<-read.table('K562_polya.tsv',header=FALSE)
+df1b$cellLine<-"K562"
+df1b$type<-"polyA"
+df1c<-read.table('GM12787_totalrna.tsv',header=FALSE)
+df1c$cellLine<-"GM12787"
+df1c$type<-"totalRNA"
+
+df1<-rbind(df1a,df1b,df1c)
+names(df1)[match(names(df1),c("V1","V2","V3"),nomatch=FALSE)]<-c("Coverage","Counts","Area")
 
 ############# CAE plots #############
 CAEGrid<-expand.grid(phi=seq(0,2*pi,pi/4)*180/pi,theta=seq(0,2*pi,pi/4)*180/pi)
