@@ -1,8 +1,10 @@
 library(tidyverse)
-library(plot3D)
+library(scatterplot3d)
+library(rgl)
+library(lme4)
 
 options(stringsAsFactors=FALSE)
-
+oldPar<-par()
 setwd('~/gdrive/RNAEditing/')
 
 ############# Import data #############
@@ -16,31 +18,62 @@ df1c<-read.table('GM12787_totalrna.tsv',header=FALSE)
 df1c$cellLine<-"GM12787"
 df1c$type<-"totalRNA"
 
+# Bind and replace names:
 df1<-rbind(df1a,df1b,df1c)
 names(df1)[match(names(df1),c("V1","V2","V3"),nomatch=FALSE)]<-c("Coverage","Counts","Area")
 
+# Add color:
+pal1<-RColorBrewer::brewer.pal(3,"Set1") # Red, blue, green
+df1$color<-pal1[1]
+df1$color[df1$cellLine=="K562"]<-pal1[2]
+df1$color[df1$type=="totalRNA"]<-pal1[3]
+
 ############# CAE plots #############
-CAEGrid<-expand.grid(phi=seq(0,2*pi,pi/4)*180/pi,theta=seq(0,2*pi,pi/4)*180/pi)
-for(i in 1:nrow(CAEGrid)){
-  file<-paste0("plots/CountsAreaEditing3d_",CAEGrid$phi[i],"_",CAEGrid$theta[i],".png")
-  png(file=file,height=5,width=6,unit="in",res=300)
-  scatter3D(z=df1$Counts,y=df1$Area,x=df1$Coverage,
-            zlab="Counts",ylab="Area",xlab="Coverage",
-            phi=CAEGrid$phi[i],theta=CAEGrid$theta[i])
-  dev.off()
-}
+png(file="plots/CovAreaCount_Color.png",height=5,width=6,unit="in",res=300)
+par(las=2)
+idk<-scatterplot3d(x=df1$Coverage,y=df1$Area,z=df1$Counts,color=df1$color,
+              xlab="Coverage",ylab="Area",zlab="Counts",angle=40,
+              cex.axis=.7)
+dev.off()
 
-lm1<-lm(Coverage~Counts+Area,data=df1)
+scatterplot3d(x=df1$Coverage,y=df1$Area,z=df1$Counts/df1$Area,color=df1$color,
+                   xlab="Coverage",ylab="Area",zlab="Rate",angle=50,
+                   cex.axis=.7)
+
+plot3d(x=df1$Coverage,y=df1$Area,z=df1$Counts, col=df1$color,type = "p")
+plot3d(x=df1$Coverage,y=log(df1$Area),z=df1$Counts, col=df1$color,type = "p")
+
+############# Model #############
+df1$areaSq<-df1$Area**2
+df1$coverageSq<-df1$Coverage**2
+df1$areaSqR<-sqrt(df1$Area)
+df1$coverageSqR<-sqrt(df1$Coverage)
+df1$areaCub<-df1$Area**3
+
+lmBig<-lm(Counts~Area+Coverage+areaSq+areaSqR+coverageSq+coverageSqR,data=df1)
+summary(lmBig)
+
+lmBig2<-update(lmBig,.~.-areaSqR-coverageSq-coverageSqR)
+summary(lmBig2)
+
+lm1<-lm(Counts~Area*Coverage+areaSq,data=df1)
 summary(lm1)
-anova(lm1)
 
-gridLines<-30
-xPred<-seq(min(df1$Counts),max(df1$Counts),length.out=gridLines)
-yPred<-seq(min(df1$Area),max(df1$Area),length.out=gridLines)
-xyPred<-expand.grid(Counts=xPred,Area=yPred)
-zPred<-matrix(predict(lm1,newdata=xyPred),nrow=gridLines,ncol=gridLines)
+lm2<-lm(Counts~Area+areaSq+areaCub,data=df1)
+summary(lm2)
 
-scatter3D(x=df1$Counts,y=df1$Area,z=df1$Coverage,
-          xlab="Counts",ylab="Area",zlab="Editing Rate",
-          phi=25,theta=45,surf=list(x=xPred,y=yPred,z=zPred,col="grey"))
-surf3D(x=xPred,y=yPred,z=zPred,add=TRUE)
+lm3<-update(lm2,.~.-areaCub)
+anova(lm3,lm2)
+
+lm3me<-lmer(Counts~Area+areaSq+areaCub+(1|cellLine),data=df1)
+
+df1$pred<-predict(lm3)
+
+plot3d(x=df1$Coverage,y=df1$Area,z=df1$Counts, col=df1$color,type = "p")
+points3d(x=df1$Coverage,y=df1$Area,z=df1$pred)
+
+df1$normCounts<-df1$Counts-df1$pred
+plot3d(x=df1$Coverage,y=df1$Area,z=df1$normCounts,col=df1$color,type = "p")
+
+plot(x=df1$Area,y=df1$normCounts/df1$Area,col=df1$color)
+plot(x=df1$Area,y=df1$Counts/df1$Area,col=df1$color)
