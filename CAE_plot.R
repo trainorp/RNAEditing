@@ -44,6 +44,7 @@ plot3d(x=df1$Coverage,y=df1$Area,z=df1$Counts, col=df1$color,type = "p")
 plot3d(x=df1$Coverage,y=log(df1$Area),z=df1$Counts, col=df1$color,type = "p")
 
 ############# Model #############
+df1$Area<-log(df1$Area)
 df1$areaSq<-df1$Area**2
 df1$coverageSq<-df1$Coverage**2
 df1$areaSqR<-sqrt(df1$Area)
