@@ -2,6 +2,7 @@ library(tidyverse)
 library(scatterplot3d)
 library(rgl)
 library(lme4)
+library(lmerTest)
 
 options(stringsAsFactors=FALSE)
 oldPar<-par()
@@ -81,14 +82,19 @@ summary(lm2)
 lm3<-update(lm2,.~.-areaCub)
 anova(lm3,lm2)
 
-lm3me<-lmer(Counts~Area+areaSq+areaCub+(1|id),data=df1)
+lm3me<-lmer(Counts~Area+areaSq+areaCub+Coverage+Coverage:Area+Area*type+(1|id),data=df1)
 coef1<-as.matrix(coef(lm3me)$id[1,])
 df1$pred<-mean(coef(lm3me)$id[,1])+coef1[,'Area']*df1$Area+coef1[,'areaSq']*df1$areaSq+
-  coef1[,'areaCub']*df1$areaCub
+  coef1[,'areaCub']*df1$areaCub+coef1[,'Coverage']*df1$Coverage+
+  coef1[,'Area:Coverage']*df1$Area*df1$Coverage+
+  ifelse(df1$type=="total",1,0)*coef1[,'typetotal']+
+  ifelse(df1$type=="total",1,0)*df1$Area*coef1[,'Area:typetotal']
 
 plot3d(x=df1$Coverage,y=df1$Area,z=df1$Counts, col=df1$color,type = "p")
 points3d(x=df1$Coverage,y=df1$Area,z=df1$pred)
 
 ############# Statistical test #############
+df1$norm<-df1$pred-df1$Counts
 lm4me<-update(lm3me,.~.+cellLine)
 summary(lm4me)
+anova(lm4me)
