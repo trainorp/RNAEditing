@@ -1,46 +1,100 @@
 library(tidyverse)
-library(plot3D)
+library(scatterplot3d)
+library(rgl)
+library(lme4)
+library(lmerTest)
 
 options(stringsAsFactors=FALSE)
-
+oldPar<-par()
 setwd('~/gdrive/RNAEditing/')
 
 ############# Import data #############
-df1a<-read.table('GM12787_polya.tsv',header=FALSE)
-df1a$cellLine<-"GM12787"
-df1a$type<-"polyA"
-df1b<-read.table('K562_polya.tsv',header=FALSE)
-df1b$cellLine<-"K562"
-df1b$type<-"polyA"
-df1c<-read.table('GM12787_totalrna.tsv',header=FALSE)
-df1c$cellLine<-"GM12787"
-df1c$type<-"totalRNA"
+files<-list.files(path="split_by_file",recursive=TRUE)
 
-df1<-rbind(df1a,df1b,df1c)
-names(df1)[match(names(df1),c("V1","V2","V3"),nomatch=FALSE)]<-c("Coverage","Counts","Area")
+temp2<-list()
+for(i in 1:length(files)){
+  temp<-read.table(file=paste0("split_by_file/",files[i]),header=FALSE)
+  splitFile<-unlist(str_split(files[i],"/"))
+  temp$pheno<-splitFile[1]
+  names(temp)[match(names(temp),c("V1","V2","V3"),nomatch=FALSE)]<-
+    c("Coverage","Counts","Area")
+  temp$id<-unlist(str_split(splitFile[2],"\\."))[1]
+  temp$opt<-unlist(str_split(unlist(str_split(splitFile[2],"_"))[3],"\\."))[1]
+  temp2[[i]]<-temp
+}
+df1<-do.call("rbind",temp2)
+
+table(df1$opt)
+
+# Cell line:
+df1$cellLine<-sapply(str_split(df1$pheno,"_"),function(x) x[1])
+df1$type<-sapply(str_split(df1$pheno,"_"),function(x) x[2])
+
+# Add color:
+pal1<-RColorBrewer::brewer.pal(4,"Set1") # Red, blue, green
+df1$color<-pal1[1]
+df1$color[df1$pheno=="GM12787_total"]<-pal1[2]
+df1$color[df1$pheno=="K562_polya"]<-pal1[3]
+df1$color[df1$pheno=="K562_total"]<-pal1[4]
+
+# First analysis:
+df0<-df1
+df1<-df0[df0$opt=="c5e3",]
 
 ############# CAE plots #############
-CAEGrid<-expand.grid(phi=seq(0,2*pi,pi/4)*180/pi,theta=seq(0,2*pi,pi/4)*180/pi)
-for(i in 1:nrow(CAEGrid)){
-  file<-paste0("plots/CountsAreaEditing3d_",CAEGrid$phi[i],"_",CAEGrid$theta[i],".png")
-  png(file=file,height=5,width=6,unit="in",res=300)
-  scatter3D(z=df1$Counts,y=df1$Area,x=df1$Coverage,
-            zlab="Counts",ylab="Area",xlab="Coverage",
-            phi=CAEGrid$phi[i],theta=CAEGrid$theta[i])
-  dev.off()
-}
+png(file="plots/CovAreaCount_Color.png",height=5,width=6,unit="in",res=300)
+par(las=2)
+idk<-scatterplot3d(x=df1$Coverage,y=df1$Area,z=df1$Counts,color=df1$color,
+              xlab="Coverage",ylab="Area",zlab="Counts",angle=40,
+              cex.axis=.7)
+dev.off()
 
-lm1<-lm(Coverage~Counts+Area,data=df1)
+scatterplot3d(x=df1$Coverage,y=df1$Area,z=df1$Counts/df1$Area,color=df1$color,
+                   xlab="Coverage",ylab="Area",zlab="Rate",angle=50,
+                   cex.axis=.7)
+
+par3d(windowRect = c(0,50,612,612))
+parent <- currentSubscene3d()
+plot3d(x=df1$Coverage,y=df1$Area,z=df1$Counts, col=df1$color,type = "p")
+legend3d("topright",legend=names(table(df1$pheno)),pch=16,
+         col=pal1,cex=1,inset=c(0.02))
+
+############# Model #############
+df1$Area<-log(df1$Area)
+df1$areaSq<-df1$Area**2
+df1$coverageSq<-df1$Coverage**2
+df1$areaSqR<-sqrt(df1$Area)
+df1$coverageSqR<-sqrt(df1$Coverage)
+df1$areaCub<-df1$Area**3
+
+lmBig<-lm(Counts~Area+Coverage+areaSq+areaSqR+coverageSq+coverageSqR,data=df1)
+summary(lmBig)
+
+lmBig2<-update(lmBig,.~.-areaSqR-coverageSq-coverageSqR)
+summary(lmBig2)
+
+lm1<-lm(Counts~Area*Coverage+areaSq,data=df1)
 summary(lm1)
-anova(lm1)
 
-gridLines<-30
-xPred<-seq(min(df1$Counts),max(df1$Counts),length.out=gridLines)
-yPred<-seq(min(df1$Area),max(df1$Area),length.out=gridLines)
-xyPred<-expand.grid(Counts=xPred,Area=yPred)
-zPred<-matrix(predict(lm1,newdata=xyPred),nrow=gridLines,ncol=gridLines)
+lm2<-lm(Counts~Area+areaSq+areaCub,data=df1)
+summary(lm2)
 
-scatter3D(x=df1$Counts,y=df1$Area,z=df1$Coverage,
-          xlab="Counts",ylab="Area",zlab="Editing Rate",
-          phi=25,theta=45,surf=list(x=xPred,y=yPred,z=zPred,col="grey"))
-surf3D(x=xPred,y=yPred,z=zPred,add=TRUE)
+lm3<-update(lm2,.~.-areaCub)
+anova(lm3,lm2)
+
+lm3me<-lmer(Counts~Area+areaSq+areaCub+Coverage+Coverage:Area+Area*type+(1|id),data=df1)
+coef1<-as.matrix(coef(lm3me)$id[1,])
+df1$pred<-mean(coef(lm3me)$id[,1])+coef1[,'Area']*df1$Area+coef1[,'areaSq']*df1$areaSq+
+  coef1[,'areaCub']*df1$areaCub+coef1[,'Coverage']*df1$Coverage+
+  coef1[,'Area:Coverage']*df1$Area*df1$Coverage+
+  ifelse(df1$type=="total",1,0)*coef1[,'typetotal']+
+  ifelse(df1$type=="total",1,0)*df1$Area*coef1[,'Area:typetotal']
+
+plot3d(x=df1$Coverage,y=df1$Area,z=df1$Counts, col=df1$color,type = "p")
+points3d(x=df1$Coverage,y=df1$Area,z=df1$pred)
+
+############# Statistical test #############
+df1$norm<-df1$pred-df1$Counts
+lm4me<-update(lm3me,.~.+cellLine)
+summary(lm4me)
+anova(lm4me)
