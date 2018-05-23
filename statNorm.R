@@ -1,6 +1,11 @@
 ############# Prereqs #############
+library(tidyverse)
 library(lme4)
 library(lmerTest)
+
+options(stringsAsFactors=FALSE)
+oldPar<-par()
+setwd('~/gdrive/RNAEditing/')
 
 files<-list.files(path="split_by_file",recursive=TRUE)
 
