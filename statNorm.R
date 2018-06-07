@@ -2,6 +2,7 @@
 library(tidyverse)
 library(lme4)
 library(lmerTest)
+library(zoib)
 
 options(stringsAsFactors=FALSE)
 oldPar<-par()
@@ -34,7 +35,9 @@ df1$areaSqR<-sqrt(df1$Area)
 df1$coverageSqR<-sqrt(df1$Coverage)
 df1$areaCub<-df1$Area**3
 
+df1<-df1[df1$opt=="c5e3",]
 lm3me<-lmer(Counts~Area+areaSq+areaCub+Coverage+Coverage:Area+Area*type+(1|id),data=df1)
+
 coef1<-as.matrix(coef(lm3me)$id[1,])
 df1$pred<-mean(coef(lm3me)$id[,1])+coef1[,'Area']*df1$Area+coef1[,'areaSq']*df1$areaSq+
   coef1[,'areaCub']*df1$areaCub+coef1[,'Coverage']*df1$Coverage+
@@ -47,3 +50,21 @@ df1$norm<-df1$pred-df1$Counts
 lm4me<-update(lm3me,.~.+cellLine)
 summary(lm4me)
 anova(lm4me)
+
+idNorm<-df1 %>% group_by(id) %>% summarize(mean(norm))
+
+############# Sites #############
+sites<-read.table('all_huvec_site_stats.srt.ann.tsv')
+names(sites)<-c("Sample","Group","Island_ID","Location","Transition_Type",
+                "Edited_Bases", "Total_Mapped_Bases")
+
+sites$prop<-sites$Edited_Bases/sites$Total_Mapped_Bases
+sites$prop[is.nan(sites$prop)]<-NA
+
+############# Sites #############
+sites<-sites %>% group_by(Location) %>% 
+  mutate(locN=sum(ifelse(Total_Mapped_Bases>0,1L,0L)))
+sites<-sites %>% group_by(Island_ID) %>% 
+  mutate(islandN=sum(ifelse(Total_Mapped_Bases>0,1L,0L)))
+
+hist(sites$prop)
