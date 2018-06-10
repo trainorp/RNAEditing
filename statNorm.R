@@ -2,7 +2,7 @@
 library(tidyverse)
 library(lme4)
 library(lmerTest)
-library(zoib)
+library(betareg)
 
 options(stringsAsFactors=FALSE)
 oldPar<-par()
@@ -61,10 +61,51 @@ names(sites)<-c("Sample","Group","Island_ID","Location","Transition_Type",
 sites$prop<-sites$Edited_Bases/sites$Total_Mapped_Bases
 sites$prop[is.nan(sites$prop)]<-NA
 
-############# Sites #############
+############# Site imputation #############
+# Counts: 
+sites<-sites %>% group_by(Location,Group) %>% 
+  mutate(GroupLocN=sum(ifelse(Total_Mapped_Bases>0,1L,0L)))
 sites<-sites %>% group_by(Location) %>% 
-  mutate(locN=sum(ifelse(Total_Mapped_Bases>0,1L,0L)))
-sites<-sites %>% group_by(Island_ID) %>% 
-  mutate(islandN=sum(ifelse(Total_Mapped_Bases>0,1L,0L)))
+  mutate(minGroupLocN=min(GroupLocN),locN=sum(ifelse(Total_Mapped_Bases>0L,1L,0L)))
 
-hist(sites$prop)
+sites<-sites %>% group_by(Island_ID,Group) %>% 
+  mutate(groupIslandN=sum(ifelse(Total_Mapped_Bases>0L,1L,0L)))
+sites<-sites %>% group_by(Location) %>% 
+  mutate(minGroupIslandN=min(groupIslandN),
+         groupIslandN=sum(ifelse(Total_Mapped_Bases>0L,1L,0L)))
+
+# Minimum value imputation function 
+minImpFun<-function(x){
+  if(all(is.na(x))) return(NA)
+  else{
+    x2<-x[complete.cases(x)]
+    x2<-x2[x2>0]
+    if(length(x2)>0) min(x2)
+    else return(0)
+  }
+}
+sites<-sites %>% group_by(Location) %>% mutate(minSiteProp=minImpFun(prop))
+sites<-sites %>% group_by(Island_ID) %>% mutate(minIslandProp=minImpFun(prop))
+
+# Test logical:
+sites$siteTest<-sites$minGroupLocN>=2L & sites$minSiteProp>0
+sites$islandTest<-sites$minGroupIslandN>=2L & sites$minIslandProp>0
+
+# Add pseudo-props & Logits:
+sites$prop2<-sites$prop
+sites$prop2[is.na(sites$prop) & !is.na(sites$minSiteProp)]<-
+  sites$minSiteProp[is.na(sites$prop) & !is.na(sites$minSiteProp)]
+sites$prop2<-(sites$prop2*99+.5)/100
+
+########### Beta reg model ###########
+# Order by location
+sites$chr<-str_split(sites$Location,":",simplify=TRUE)[,1]
+sites$loc<-as.integer(str_split(sites$Location,":",simplify=TRUE)[,2])
+sites<-sites %>% arrange(chr,loc)
+sites$location2<-factor(sites$Location,levels=unique(sites$Location))
+
+sites2<-sites %>% filter(siteTest)
+
+locs<-unique(sites2$Location)
+sites3<-sites2 %>% filter(Location %in% locs[1:500])
+br1<-betareg(prop2~Group+Location|Total_Mapped_Bases,data=sites3)
